@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Glossary</title>
+  <style>
+    @font-face {
+      font-family: "CustomFont";
+      src: url('OstrichSans-medium.otf');
+    }
+    
+    body {
+      margin: 0;
+      padding: 0;
+    }
+    
+    .container {
+      display: flex;
+      height: 100vh;
+    }
+    
+    .left-side {
+      width: 50%;
+      background-color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      margin-bottom: 50px; 
+      overflow-y: auto;
+    }
+    
+    .right-side {
+      width: 50%;
+      background-color: #000;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .back-button {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 1.5rem;
+      color: #000;
+      text-decoration: none;
+      /* Custom styling */
+      background-color: #fff;
+      padding: 10px 20px;
+      border-radius: 5px;
+      transition: background-color 0.3s ease;
+    }
+
+    .back-button:hover {
+      background-color: #eee;
+    }
+    
+    h1 {
+      font-family: "CustomFont", sans-serif;
+      font-size: 8rem;
+      color: #000;
+      margin: 400;
+      margin-bottom: 80px;
+      margin-top: -100px;
+      text-align: left;
+    }
+    
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    
+    li {
+      margin-bottom: 10px;
+      text-align: left;
+    }
+    
+    a {
+      font-family: "CustomFont", sans-serif;
+      font-size: 3rem;
+      color: #000;
+      text-decoration: none;
+      background-color: #fff;
+      padding: 3px 10px;
+      border-radius: 5px;
+      transition: background-color 0.3s ease;
+    }
+    
+    a:hover {
+      background-color: #eee;
+    }
+    
+    .photo {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      max-width: none;
+      max-height: none;
+      width: auto;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="left-side">
+      <a class="back-button" href="index.html">&#8592; Back</a>
+      <h1>Table of Contents</h1>
+      <ul>
+        <li><a href="aboutme.html">About Me</a></li>
+        <li><a href="workexp.html">Work Experience</a></li>
+        <li><a href="edu.html">Education</a></li>
+        <li><a href="dining.html">Fine Dining</a></li>
+        <li><a href="photos.html">Photography</a></li>
+        <li><a href="fitness.html">Fitness</a></li>
+        <li><a href="musicprod.html">Music Production</a></li>
+        <li><a href="cooking.html">Cooking</a></li>
+        <li><a href="keebs.html">Keyboards</a></li>
+        <li><a href="coding.html">Coding</a></li>
+        <!-- Add more hobby links as needed -->
+      </ul>
+    </div>
+    <div class="right-side">
+      <img class="photo" src="peakpx.jpg" alt="Vertical Photo">
+    </div

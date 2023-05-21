@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Front Page</title>
+  <style>
+    @font-face {
+      font-family: "CustomFont";
+      src: url('vonique-64.64-italic.ttf');
+    }
+
+    @font-face {
+      font-family: "CustomFont2";
+      src: url('Cocomat Light-trial.ttf');
+    }
+    
+    body {
+      margin: 0;
+      padding: 0;
+      background-image: url('mehdi-genest-o8afl8Q1ZGk-unsplash.jpg');
+      background-size: cover;
+      background-position: center;
+    }
+    
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      text-align: center;
+      opacity: 0;
+      animation: fade-in 1.7s ease-in-out forwards;
+    }
+    
+    h1 {
+      font-family: "CustomFont", sans-serif;
+      font-size: 10rem;
+      color: #000;
+      margin-top: 120px;
+      margin-bottom: 480px;
+    }
+    
+    .enter-button {
+      background-color: #fff;
+      border: none;
+      color: #000;
+      padding: 10px 20px;
+      font-size: 1.4rem;
+      font-family: "CustomFont2", sans-serif;
+      text-decoration: none;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.5s ease-in-out;
+      pointer-events: none;
+      animation: fade-in 1s ease-in-out forwards;
+    }
+    
+    .container.active .enter-button {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    
+    @keyframes fade-in {
+      0% {
+        opacity: 0;
+      }
+      100% {
+        opacity: 1;
+      }
+    }
+  </style>
+ <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const container = document.querySelector('.container');
+      const enterButton = document.querySelector('.enter-button');
+      const coordinates = document.querySelector('.coordinates');
+      let isMouseInside = false;
+      
+      function handleMouseMove(event) {
+        const enterButtonRect = enterButton.getBoundingClientRect();
+        const mouseX = event.clientX;
+        const mouseY = event.clientY;
+        
+        const distanceX = Math.abs(mouseX - enterButtonRect.left - enterButtonRect.width / 2);
+        const distanceY = Math.abs(mouseY - enterButtonRect.top - enterButtonRect.height / 2);
+        
+        const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY);
+        
+        if (distance <= 50) {
+          if (!isMouseInside) {
+            isMouseInside = true;
+            container.classList.add('active');
+          }
+        } else {
+          if (isMouseInside) {
+            isMouseInside = false;
+            container.classList.remove('active');
+          }
+        }
+        
+        coordinates.textContent = `Coordinates: ${mouseX}px, ${mouseY}px`;
+      }
+      
+      document.documentElement.addEventListener('mousemove', handleMouseMove);
+    });
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1>NICHOLAS Te</h1>
+    <a class="enter-button" href="ToC.html">ENTER HERE</a>
+  </div>
+</body>
+</html>
