@@ -153,3 +153,4 @@ dialog#sheet::backdrop { background: rgba(0, 0, 0, .55); }
 
 @media (max-width: 380px) { .two, .tiles { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+.answer { white-space: pre-wrap; overflow-wrap: anywhere; }
