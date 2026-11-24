@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sum</title>
+  <meta name="description" content="Send it here. See the sum of what you've been into.">
+  <meta name="theme-color" content="#121110">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="sigma">Σ</span> Sum</div>
+    <button id="installBtn" class="ghost" hidden>Install</button>
+  </header>
+
+  <main id="main"></main>
+
+  <nav class="tabs" aria-label="Sections">
+    <button data-tab="pulse">Pulse</button>
+    <button data-tab="library">Library</button>
+    <button data-tab="add" class="add" aria-label="Add a link">+</button>
+    <button data-tab="wrapped">Wrapped</button>
+    <button data-tab="setup">Setup</button>
+  </nav>
+
+  <dialog id="sheet"></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
