@@ -1,5 +1,5 @@
 /* Network first so updates land; cached copy keeps Sum opening offline. */
-const CACHE = 'sum-v1';
+const CACHE = 'sum-v2';
 const SHELL = ['./', 'app.js', 'style.css', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {

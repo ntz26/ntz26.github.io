@@ -4,6 +4,8 @@
   'use strict';
 
   const KEY = 'sum.v1';
+  const SYNC_KEY = 'sum.sync';
+  const API = 'https://zuebnupyfwvqgqhuecbq.supabase.co/functions/v1/sum';
   const DAY = 864e5;
 
   const TOPICS = [
@@ -46,6 +48,83 @@
     try { localStorage.setItem(KEY, JSON.stringify(state)); }
     catch (e) { toast('Could not save — storage is full or blocked'); }
   };
+
+  /* ---------- sync (optional): your own backend keeps the history and does the smart sorting ---------- */
+  let sync = {};
+  try { sync = JSON.parse(localStorage.getItem(SYNC_KEY) || '{}') || {}; } catch (e) { /* not connected */ }
+  const saveSync = () => { try { localStorage.setItem(SYNC_KEY, JSON.stringify(sync)); } catch (e) { /* ignore */ } };
+
+  async function api(path, method = 'GET', body) {
+    const res = await fetch(API + path, {
+      method,
+      headers: Object.assign({ 'x-sum-key': sync.key }, body ? { 'content-type': 'application/json' } : {}),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw Object.assign(new Error(data.message || 'Request failed'), { status: res.status });
+    return data;
+  }
+  /* fire-and-forget change to the server copy */
+  function push(path, method, body) {
+    if (sync.key) api(path, method, body).catch(() => toast("Couldn't reach the server — that change is on this device only"));
+  }
+
+  const sending = new Set();
+  async function sendItem(it) {
+    if (sending.has(it.id)) return false;
+    sending.add(it.id);
+    try {
+      const d = await api('/catch', 'POST', { url: it.url, title: it.title, text: it.shared, id: it.id, at: it.at });
+      const server = d.item;
+      if (it.manual || it.note) {
+        await api('/items/' + server.id, 'PATCH', Object.assign({ note: it.note }, it.manual ? { topics: it.topics } : {}));
+        server.note = it.note;
+        if (it.manual) { server.topics = it.topics; server.manual = true; }
+      }
+      const i = state.items.findIndex((x) => x.id === it.id);
+      if (i >= 0) state.items[i] = server;
+      if (sheetId === it.id) sheetId = server.id;
+      save();
+      return true;
+    } catch (e) { return false; } finally { sending.delete(it.id); }
+  }
+
+  let pulling = false;
+  async function pull() {
+    if (!sync.key || pulling) return;
+    pulling = true;
+    try {
+      for (const it of state.items.filter((i) => i.pending)) await sendItem(it);
+      const d = await api('/state');
+      state.items = state.items.filter((i) => i.pending).concat(d.items).sort((a, b) => b.at - a.at);
+      state.topics = d.topics;
+      sync.ai = !!d.ai; saveSync(); save();
+      render();
+      if (sheet.open && sheetId && (document.activeElement || {}).id !== 'note') drawSheet();
+    } catch (e) {
+      if (e.status === 401) toast('Your sync key was rejected — reconnect in Setup');
+    }
+    pulling = false;
+  }
+
+  async function connect(key) {
+    sync = { key };
+    try {
+      const d = await api('/claim', 'POST', {});
+      sync.ai = !!d.ai; saveSync();
+      const mine = state.items.filter((i) => !i.sample);
+      if (mine.length) await api('/import', 'POST', { items: mine });
+      state.items = [];
+      await pull();
+      toast('Sync is on');
+    } catch (e) {
+      sync = {}; saveSync();
+      toast(e.status === 409 ? "This Sum already has an owner — use 'I have a key'" : "Couldn't turn sync on — try again");
+    }
+    render();
+  }
+
+  let answer = null; // { q, text }
 
   let tab = 'pulse';
   let libQuery = '';
@@ -132,10 +211,12 @@
     return scored.slice(0, 2).map((s) => s.id);
   }
 
-  const textOf = (it) => [it.title, it.shared, it.note, it.author].filter(Boolean).join(' ');
+  const cleanTitle = (it) => (/^tiktok - make your day$/i.test(it.title || '') ? '' : it.title);
+  const textOf = (it) => [cleanTitle(it), it.summary, it.shared, it.note, it.author].filter(Boolean).join(' ');
 
   function displayTitle(it) {
-    if (it.title) return it.title;
+    if (cleanTitle(it)) return it.title;
+    if (it.summary) return it.summary;
     if (it.note) return it.note;
     if (it.shared) return it.shared;
     const p = PLATFORMS[it.platform] || PLATFORMS.web;
@@ -185,10 +266,19 @@
       note: '', thumb: '', topics: [], manual: false,
     };
     it.topics = classify(textOf(it));
+    if (sync.key) it.pending = true;
     state.items.unshift(it);
     save(); render();
     openSheet(it.id, true);
-    enrich(it);
+    if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    if (sync.key) {
+      sendItem(it).then((ok) => {
+        if (!ok) { toast('Saved here — will sync when you are back online'); return; }
+        render();
+        if (sheet.open && (document.activeElement || {}).id !== 'note') drawSheet();
+        if (sync.ai) setTimeout(pull, 9000); // pick up the smart sorting once it has run
+      });
+    } else enrich(it);
     return it;
   }
 
@@ -261,7 +351,7 @@
         <p class="sub">Every reel, TikTok or video you bother to share is a signal. Share it to Sum instead of your saved folder and it gets sorted, counted and findable.</p></div>
         <div class="card"><h2>Start</h2><div class="btnrow">
           <button class="btn" data-act="add">Paste your first link</button>
-          <button class="ghost" data-act="sample">See it with sample data</button>
+          ${sync.key ? '' : '<button class="ghost" data-act="sample">See it with sample data</button>'}
           <button class="ghost" data-act="goto" data-to="setup">How to share from apps</button></div></div>`;
     }
     const now = Date.now();
@@ -294,8 +384,9 @@
 
     return `<div class="hero"><div class="eyebrow">Last 30 days</div><h1>${headline}</h1>
       <p class="sub">${plural(cur.length, 'thing')} sent · ${prev.length} the 30 days before</p></div>
-      <input class="field" id="find" type="search" placeholder="Find that thing… carbonara, dog, stretch" enterkeyhint="search">
-      <div style="height:12px"></div>
+      <input class="field" id="find" type="search" placeholder="${sync.ai ? 'Find a thing, or ask: what am I into lately?' : 'Find that thing… carbonara, dog, stretch'}" enterkeyhint="search" value="${esc(answer ? answer.q : '')}">
+      ${sync.ai ? '<div class="btnrow" style="margin-top:8px"><button class="btn" data-act="ask">Ask Sum</button><button class="ghost" data-act="findgo">Find</button></div>' : ''}
+      ${answer ? `<div class="card answer" style="margin-top:12px">${esc(answer.text)}</div>` : '<div style="height:12px"></div>'}
       <div class="two">
         <div class="card"><h2>Range</h2>${score === null
           ? `<div class="big">–</div><div class="cap">Needs 5 sorted sends this month</div>`
@@ -379,23 +470,38 @@
     const hasSample = state.items.some((i) => i.sample);
     const bm = `javascript:location.href='${base}?url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title)`;
     return `<div class="hero"><div class="eyebrow">Setup</div><h1>Make sending <em>one tap.</em></h1></div>
-      <div class="card"><h2>Android</h2><ol class="steps">
-        <li>Open this page in Chrome → menu → <strong>Install app</strong> (or Add to Home screen).</li>
-        <li>In Instagram, TikTok, YouTube or Facebook: <strong>Share → Sum</strong>.</li></ol></div>
-      <div class="card"><h2>iPhone</h2><ol class="steps">
+      <div class="card"><h2>Sync &amp; smart sorting</h2>${sync.key ? `
+        <div class="cap" style="margin:0 0 12px">On. Your history is kept in your own database and follows you across devices. ${sync.ai
+          ? 'Smart sorting and Ask are on.' : 'Smart sorting and Ask are off until an Anthropic API key is added to the backend.'}</div>
+        <div class="btnrow"><button class="ghost" data-act="copykey">Copy my key</button><button class="ghost" data-act="pull">Sync now</button>
+          <button class="ghost danger" data-act="syncoff">Disconnect this device</button></div>
+        <div class="cap">Your key is the only way in. Keep it private; paste it on another device to connect that one.</div>` : `
+        <div class="cap" style="margin:0 0 12px">Off. Everything lives only in this browser. On iPhone, Safari can clear that after a week unused, so turn this on.</div>
+        <div class="btnrow"><button class="btn" data-act="syncon">Turn on sync</button><button class="ghost" data-act="synckey">I have a key</button></div>`}</div>
+      <div class="card"><h2>iPhone</h2>${sync.key ? `<ol class="steps">
+        <li>Shortcuts app → <strong>+</strong> → name it “Sum”. Tap <strong>ⓘ</strong> → turn on <strong>Show in Share Sheet</strong>.</li>
+        <li>Add action <strong>URL Encode</strong>. It should say “URL Encode Shortcut Input”.</li>
+        <li>Add action <strong>Get Contents of URL</strong>. Tap the URL field, paste the link from the button below, then right after it insert the <strong>URL Encoded Text</strong> variable. Tap the arrow → Method: <strong>POST</strong>.</li>
+        <li>Add action <strong>Get Dictionary Value</strong> → key: <code>message</code>.</li>
+        <li>Add action <strong>Show Notification</strong> with that Dictionary Value.</li></ol>
+        <div class="btnrow" style="margin-top:10px"><button class="btn" data-act="copyshortcut">Copy link for step 3</button></div>
+        <div class="cap">Then in Instagram, TikTok or YouTube: Share → Sum. Nothing opens; you get a “Caught” notification. The link contains your key, so don't share the Shortcut.</div>` : `<ol class="steps">
         <li>Shortcuts app → new shortcut → turn on <strong>Show in Share Sheet</strong>, accepting URLs and text.</li>
         <li>Add action <strong>URL Encode</strong> on the Shortcut Input.</li>
         <li>Add action <strong>Open URLs</strong> with: <code>${esc(base)}?url=</code> followed by the encoded text.</li>
         <li>Name it “Sum”. Now Share → Sum from any app.</li></ol>
-        <div class="cap">On iPhone this opens in Safari, so keep using Sum in Safari rather than a Home Screen icon — the two don't share storage.</div></div>
+        <div class="cap">This opens Safari each time. Turn on sync above for a version that saves in the background.</div>`}</div>
+      <div class="card"><h2>Android</h2><ol class="steps">
+        <li>Open this page in Chrome → menu → <strong>Install app</strong> (or Add to Home screen).</li>
+        <li>In Instagram, TikTok, YouTube or Facebook: <strong>Share → Sum</strong>.</li></ol></div>
       <div class="card"><h2>Computer</h2><div class="cap" style="margin:0 0 10px">Drag this to your bookmarks bar, then click it on any page.</div>
         <a class="ghost" style="display:inline-block;text-decoration:none" href="${esc(bm)}">Σ Send to Sum</a></div>
-      <div class="card"><h2>Your data</h2><div class="cap" style="margin:0 0 12px">${plural(state.items.length, 'item')}, stored only in this browser on this device. Export now and then as a backup.</div>
+      <div class="card"><h2>Your data</h2><div class="cap" style="margin:0 0 12px">${plural(state.items.length, 'item')}, ${sync.key ? 'synced to your database' : 'stored only in this browser on this device'}. Export now and then as a backup.</div>
         <div class="btnrow">
           <button class="ghost" data-act="export">Export</button>
           <button class="ghost" data-act="import">Import</button>
-          ${hasSample ? '<button class="ghost" data-act="clearsample">Remove sample data</button>' : '<button class="ghost" data-act="sample">Load sample data</button>'}
-          <button class="ghost danger" data-act="wipe">Erase everything</button>
+          ${sync.key ? '' : (hasSample ? '<button class="ghost" data-act="clearsample">Remove sample data</button>' : '<button class="ghost" data-act="sample">Load sample data</button>')}
+          ${sync.key ? '' : '<button class="ghost danger" data-act="wipe">Erase everything</button>'}
         </div><input type="file" id="importFile" accept="application/json,.json" hidden></div>`;
   }
 
@@ -443,8 +549,9 @@
     const v = note.value.trim();
     if (v !== it.note) {
       it.note = v;
-      if (!it.manual) it.topics = classify(textOf(it));
+      if (!it.manual && !sync.ai) it.topics = classify(textOf(it));
       save();
+      if (!it.pending) push('/items/' + it.id, 'PATCH', { note: v });
     }
   }
 
@@ -468,16 +575,19 @@
       const t = b.dataset.topic;
       it.topics = it.topics.includes(t) ? it.topics.filter((x) => x !== t) : it.topics.concat(t);
       it.manual = true; save(); drawSheet();
+      if (!it.pending) push('/items/' + it.id, 'PATCH', { topics: it.topics });
     } else if (act === 'newtopic' && it) {
       const label = (prompt('Name the new topic') || '').trim().slice(0, 30);
       if (!label) return;
       let t = allTopics().find((x) => x.label.toLowerCase() === label.toLowerCase());
-      if (!t) { t = { id: 'c_' + Date.now().toString(36), label, emoji: '✳️', kw: label.toLowerCase() }; state.topics.push(t); }
+      if (!t) { t = { id: 'c_' + Date.now().toString(36), label, emoji: '✳️', kw: label.toLowerCase() }; state.topics.push(t); push('/topics', 'POST', t); }
       if (!it.topics.includes(t.id)) it.topics.push(t.id);
       it.manual = true; save(); drawSheet();
+      if (!it.pending) push('/items/' + it.id, 'PATCH', { topics: it.topics });
     } else if (act === 'delete' && it) {
       if (!confirm('Delete this from Sum?')) return;
       state.items = state.items.filter((i) => i.id !== it.id);
+      if (!it.pending) push('/items/' + it.id, 'DELETE');
       save(); sheet.close(); render();
     } else if (act === 'done') {
       commitNote(); sheet.close(); render();
@@ -558,6 +668,31 @@
     else if (act === 'unsorted') { libTopic = '_unsorted'; libQuery = ''; go('library'); }
     else if (act === 'filter') { libTopic = b.dataset.topic; render(); }
     else if (act === 'year') { wrappedYear = Number(b.dataset.year); render(); }
+    else if (act === 'findgo') { libQuery = $('#find').value; libTopic = ''; go('library'); }
+    else if (act === 'ask') {
+      const q = $('#find').value.trim();
+      if (!q) { toast('Type a question first'); return; }
+      answer = { q, text: 'Thinking…' }; render();
+      api('/ask', 'POST', { q }).then((d) => { answer = { q, text: d.answer }; }, (e) => { answer = { q, text: e.message || "Couldn't get an answer." }; }).then(render);
+    }
+    else if (act === 'syncon') {
+      const bytes = crypto.getRandomValues(new Uint8Array(32));
+      connect([...bytes].map((x) => x.toString(16).padStart(2, '0')).join(''));
+    }
+    else if (act === 'synckey') {
+      const k = (prompt('Paste your Sum key') || '').trim().toLowerCase();
+      if (!k) return;
+      if (!/^[a-f0-9]{64}$/.test(k)) { toast("That doesn't look like a Sum key"); return; }
+      connect(k);
+    }
+    else if (act === 'pull') pull().then(() => toast('Up to date'));
+    else if (act === 'copykey' || act === 'copyshortcut') {
+      const text = act === 'copykey' ? sync.key : `${API}/catch?key=${sync.key}&text=`;
+      navigator.clipboard.writeText(text).then(() => toast('Copied'), () => prompt('Copy this:', text));
+    }
+    else if (act === 'syncoff') {
+      if (confirm('Disconnect this device? Your history stays in your database. Copy your key first if this is your only device.')) { sync = {}; saveSync(); answer = null; render(); }
+    }
     else if (act === 'export') {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }));
@@ -610,6 +745,9 @@
 
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => {});
 
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) pull(); });
+
   render();
   captureFromUrl();
+  pull();
 })();
